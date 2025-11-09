@@ -99,11 +99,11 @@ class EnergyEnvWithPreferences(gym.Env):
 
         self.current_hour += 1
         done = self.current_hour >= self.num_hours or all(v <= 0 for v in self.remaining_durations.values())
-        
+
         # BIG PENALTY at end if appliances not fully scheduled
         if done:
             for name, remaining in self.remaining_durations.items():
                 if remaining > 0:
-                    reward -= 20.0 * remaining  # Heavy penalty for unscheduled hours
+                    reward -= 50.0 * remaining  # MASSIVE penalty for unscheduled hours - this should never happen
 
         return self._get_obs(), float(reward), done, False, {}
