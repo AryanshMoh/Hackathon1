@@ -62,25 +62,44 @@ def optimize_schedule_lp(prices, appliances, restricted_hours=None):
 
 
 def format_schedule_readable(schedule, appliances):
-    """Format schedule into human-readable time ranges"""
+    """Format schedule into human-readable time ranges with better aesthetics"""
     readable = {}
-    
+
     for name, hours in schedule.items():
         if not hours or len(hours) == 0:
-            readable[name] = "Not scheduled"
+            # This should never happen in normal operation
+            # If it does, it indicates a scheduling failure
+            readable[name] = "⚠️ Scheduling failed"
             continue
 
         hours = sorted(hours)
         ranges = []
         start = prev = hours[0]
-        
+
         for h in hours[1:]:
             if h != prev + 1:
-                ranges.append(f"{start}:00–{prev+1}:00")
+                # Format times nicely (e.g., "2:00 PM" instead of "14:00")
+                ranges.append(format_time_range(start, prev + 1))
                 start = h
             prev = h
-        ranges.append(f"{start}:00–{prev+1}:00")
-        
-        readable[name] = ", ".join(ranges)
-    
+        ranges.append(format_time_range(start, prev + 1))
+
+        # Join with nice separator
+        readable[name] = " | ".join(ranges)
+
     return readable
+
+
+def format_time_range(start_hour, end_hour):
+    """Format hour range into 12-hour format"""
+    def hour_to_12h(h):
+        if h == 0:
+            return "12:00 AM"
+        elif h < 12:
+            return f"{h}:00 AM"
+        elif h == 12:
+            return "12:00 PM"
+        else:
+            return f"{h - 12}:00 PM"
+
+    return f"{hour_to_12h(start_hour)} – {hour_to_12h(end_hour)}"

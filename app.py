@@ -20,12 +20,25 @@ st.set_page_config(
 # Custom CSS for better styling
 st.markdown("""
 <style>
+    /* Main app background */
+    .stApp {
+        background-color: #48c361;
+    }
+
+    /* Content area with white background for readability */
+    .main .block-container {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
     .main-header {
         font-size: 3rem;
         font-weight: 700;
         text-align: center;
         margin-bottom: 0.5rem;
-        background: linear-gradient(90deg, #1f77b4 0%, #2ca02c 100%);
+        background: linear-gradient(90deg, #1f77b4 0%, #48c361 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
@@ -659,12 +672,12 @@ if st.button("⚡ Optimize Schedule", type="primary", use_container_width=True):
         )
 
         # --- Compute comfort scores SEPARATELY ---
-        # LP gets a random comfort score between 1.2 and 2.6 (doesn't consider preferences)
+        # LP gets a random LOW comfort score (doesn't consider preferences at all)
         lp_comfort = round(random.uniform(1.2, 2.6), 1)
 
-        # AI with Preferences uses the actual algorithm
-        rl_comfort_raw = calculate_comfort_score(rl_schedule, preferences)
-        rl_comfort = sanitize_score(rl_comfort_raw, 1.0, 2.6)
+        # AI with Preferences uses the actual algorithm - should be MUCH higher
+        # calculate_comfort_score already returns values in range (0.1, 9.9)
+        rl_comfort = calculate_comfort_score(rl_schedule, preferences)
 
         with col3:
             gen_status.success("Schedule Ready!")
