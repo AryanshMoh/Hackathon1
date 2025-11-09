@@ -12,23 +12,41 @@ from utils.appliance_data import appliance_defaults
 # -------------------------------
 st.set_page_config(page_title="SmartEnergy Optimizer", layout="wide")
 st.title("SmartEnergy Optimizer")
-st.write("Plan your appliance usage intelligently using **ComEd’s day-ahead electricity prices** and AI optimization.")
+st.write("Plan your appliance usage intelligently using **ComEd's day-ahead electricity prices** and AI optimization.")
 
 # -------------------------------
-# Fetch latest ComEd prices automatically
+# Fetch latest ComEd prices automatically (CACHED)
 # -------------------------------
+@st.cache_data(ttl=3600)  # Cache for 1 hour (3600 seconds)
+def get_prices():
+    return fetch_comed_prices()
+
 st.subheader("💲 Latest Energy Prices")
 
 with st.spinner("Fetching latest ComEd day-ahead prices..."):
-    df_prices = fetch_comed_prices()
+    df_prices = get_prices()
 
+# Debug info (you can remove this later)
+if df_prices is not None:
+    st.write(f"📊 Loaded {len(df_prices)} hours of price data")
+    
 if df_prices is not None and not df_prices.empty:
     st.line_chart(df_prices["price"], height=200)
     st.caption("Day-ahead electricity prices ($/kWh)")
+    
+    # Show the data table as well
+    with st.expander("📋 View Price Data Table"):
+        st.dataframe(df_prices)
 else:
-    st.error("⚠️ Could not fetch ComEd prices.")
+    st.warning("⚠️ No price data available")
 
 prices = df_prices["price"].values if df_prices is not None else []
+
+# Show how many price points we have for optimization
+if len(prices) > 0:
+    st.success(f"✅ Ready to optimize with {len(prices)} hourly prices (Min: ${min(prices):.4f}, Max: ${max(prices):.4f})")
+else:
+    st.error("❌ No price data available for optimization")
 
 # -------------------------------
 # Appliance Selection
@@ -81,9 +99,8 @@ if st.button("Run SmartEnergy AI Optimization"):
         model = train_agent(prices, appliances, restricted_hours)
         schedule = run_agent(model, prices, appliances, restricted_hours)
 
-    readable = format_schedule_readable(schedule, appliances)
     st.success("✅ AI-Optimized Schedule:")
-    st.json(readable)
+    st.json(schedule)
 
     # --- Calculate cost savings ---
     total_cost_optimized = sum(
@@ -100,4 +117,4 @@ if st.button("Run SmartEnergy AI Optimization"):
     st.metric("💰 Estimated Daily Savings", f"${savings:.2f}")
 
 else:
-    st.info("Press the button above to let the AI optimize your schedule based on ComEd’s upcoming prices.")
+    st.info("Press the button above to let the AI optimize your schedule based on ComEd's upcoming prices.")

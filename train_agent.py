@@ -11,8 +11,20 @@ def train_agent(prices, appliances, restricted_hours):
     env = EnergyEnv(prices, appliances, restricted_hours)
     check_env(env, warn=True)
 
-    model = PPO("MlpPolicy", env, verbose=0)
-    model.learn(total_timesteps=10000)  # ~10–15 seconds training
+    # ⭐ Improved hyperparameters for better learning
+    model = PPO(
+        "MlpPolicy", 
+        env, 
+        learning_rate=0.0003,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,
+        verbose=0
+    )
+    
+    # ⭐ More timesteps for better learning
+    model.learn(total_timesteps=50000)
     model.save("models/energy_agent")
 
     return model
@@ -29,14 +41,16 @@ def run_agent(model, prices, appliances, restricted_hours):
     schedule = {a["name"]: [] for a in appliances}
 
     while not done:
+        # Record the hour BEFORE stepping
+        current_hour = env.current_hour
+        
         action, _ = model.predict(obs, deterministic=True)
         obs, reward, done, _, info = env.step(action)
 
         # Record scheduled hour for each appliance
         for i, a in enumerate(appliances):
             if action[i] == 1:
-                hour = env.current_hour
-                schedule[a["name"]].append(hour)
+                schedule[a["name"]].append(current_hour)
 
     # Format hours into human-readable ranges
     readable_schedule = {}

@@ -42,7 +42,7 @@ class EnergyEnv(gym.Env):
 
     def step(self, action):
         done = False
-        reward = 0
+        reward = 0.0
 
         # If restricted hour → penalize any attempted usage
         if self.current_hour in self.restricted_hours:
@@ -50,7 +50,7 @@ class EnergyEnv(gym.Env):
             self.current_hour += 1
             if self.current_hour >= self.num_hours:
                 done = True
-            return self._get_obs(), reward, done, False, {}
+            return self._get_obs(), float(reward), done, False, {}
 
         # Compute energy cost and progress
         total_cost = 0
@@ -70,6 +70,11 @@ class EnergyEnv(gym.Env):
 
         self.current_hour += 1
         done = self.current_hour >= self.num_hours or all(v <= 0 for v in self.remaining_durations.values())
+        
+        #BIG PENALTY at end if appliances not scheduled
+        if done:
+            for name, remaining in self.remaining_durations.items():
+                if remaining > 0:
+                    reward -= 10.0 * remaining  # Heavy penalty for unscheduled hours
 
-        return self._get_obs(), reward, done, False, {}
-
+        return self._get_obs(), float(reward), done, False, {}

@@ -51,7 +51,7 @@ def generate_sample_prices():
 def fetch_comed_prices():
     """
     Fetches current 5-minute ComEd prices and cleans them for display.
-    Falls back to sample data if API is unavailable.
+    Falls back to sample data if API is unavailable or returns no future data.
     """
     URL = "https://hourlypricing.comed.com/api?type=5minutefeed&format=json"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -70,6 +70,16 @@ def fetch_comed_prices():
         # Filter to only entries from 'now' forward
         now = datetime.now(pytz.timezone("America/Chicago"))
         df = df[df["datetime"] >= now]
+
+        # ⭐ NEW CHECK: If filtering removed all data, use sample data
+        if df.empty:
+            print("⚠️ API returned only historical data (nothing in the future)")
+            print("📊 Using sample price data instead...")
+            df = generate_sample_prices()
+            os.makedirs("data", exist_ok=True)
+            df.to_csv("data/prices.csv", index=False)
+            print(f"✅ Generated {len(df)} hours of sample price data.")
+            return df
 
         # Format timestamps to AM/PM display
         df["time"] = df["datetime"].dt.strftime("%I:%M %p")
