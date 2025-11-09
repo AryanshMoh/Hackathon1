@@ -281,10 +281,12 @@ col1, col2 = st.columns(2)
 if "schedule_lp" not in st.session_state:
     st.session_state.schedule_lp = None
     st.session_state.total_cost_lp = None
+    st.session_state.comfort_lp = None
 
 if "schedule_ai" not in st.session_state:
     st.session_state.schedule_ai = None
-    st.session_state.comfort_score = None
+    st.session_state.total_cost_ai = None
+    st.session_state.comfort_ai = None
 
 # --- LP Optimizer ---
 if col1.button("💡 Run LP Optimizer"):
@@ -293,22 +295,41 @@ if col1.button("💡 Run LP Optimizer"):
         st.session_state.schedule_lp = schedule_lp
         st.session_state.total_cost_lp = total_cost_lp
 
+        # Evaluate LP comfort too (usually low)
+        comfort_lp = calculate_comfort_score(schedule_lp, preferences)
+        st.session_state.comfort_lp = comfort_lp
+
         st.success("✅ Linear Programming optimization complete!")
-        st.json(format_schedule_readable(schedule_lp, appliances))
         st.metric("Total Cost ($)", f"{total_cost_lp:.4f}")
+        st.metric("Comfort Score", f"{comfort_lp:.2f}/10")
+        st.json(format_schedule_readable(schedule_lp, appliances))
 
 # --- AI Optimizer ---
 if col2.button("🤖 Run AI Optimizer (with Preferences)"):
     with st.spinner("Training AI agent (may take ~30–45 seconds)..."):
         model = train_agent_with_preferences(prices, appliances, restricted_hours, preferences)
         schedule_ai = run_agent_with_preferences(model, prices, appliances, restricted_hours, preferences)
-        comfort_score = calculate_comfort_score(schedule_ai, preferences)
 
+        # Compute AI cost
+        ai_total_cost = 0.0
+        for appliance in appliances:
+            name = appliance["name"]
+            power = appliance["power"]
+            for hour in schedule_ai.get(name, []):
+                if 0 <= hour < len(prices):
+                    ai_total_cost += prices[int(hour)] * power
+
+        # Compute AI comfort
+        comfort_ai = calculate_comfort_score(schedule_ai, preferences)
+
+        # Store in session
         st.session_state.schedule_ai = schedule_ai
-        st.session_state.comfort_score = comfort_score
+        st.session_state.total_cost_ai = ai_total_cost
+        st.session_state.comfort_ai = comfort_ai
 
         st.success("✅ AI optimization complete!")
-        st.metric("Comfort Score", f"{comfort_score:.2f}/10")
+        st.metric("Total Cost ($)", f"{ai_total_cost:.4f}")
+        st.metric("Comfort Score", f"{comfort_ai:.2f}/10")
         st.json(format_schedule_readable(schedule_ai, appliances))
 
 # -------------------------------
@@ -322,7 +343,8 @@ if st.button("Compare Results"):
         st.session_state.schedule_lp is None
         or st.session_state.schedule_ai is None
         or st.session_state.total_cost_lp is None
-        or st.session_state.comfort_score is None
+        or st.session_state.total_cost_ai is None
+        or st.session_state.comfort_ai is None
     ):
         st.warning("⚠️ You must run both the LP and AI optimizers before comparing.")
     else:
@@ -332,21 +354,64 @@ if st.button("Compare Results"):
         with colA:
             st.subheader("💡 Linear Programming")
             st.metric("Total Cost ($)", f"{st.session_state.total_cost_lp:.4f}")
+            st.metric("Comfort Score", f"{st.session_state.comfort_lp:.2f}/10")
             st.json(format_schedule_readable(st.session_state.schedule_lp, appliances))
 
         with colB:
             st.subheader("🤖 AI Optimizer (Preferences)")
-            st.metric("Comfort Score", f"{st.session_state.comfort_score:.2f}/10")
+            st.metric("Total Cost ($)", f"{st.session_state.total_cost_ai:.4f}")
+            st.metric("Comfort Score", f"{st.session_state.comfort_ai:.2f}/10")
             st.json(format_schedule_readable(st.session_state.schedule_ai, appliances))
 
-        # Show difference summary
+        # -------------------------------
+        # Cost difference summary + projected savings
+        # -------------------------------
         st.divider()
-        cost_diff = st.session_state.total_cost_lp  # base
+
+        cost_diff = st.session_state.total_cost_ai - st.session_state.total_cost_lp
+        abs_diff = abs(cost_diff)
+        comfort_diff = st.session_state.comfort_ai - st.session_state.comfort_lp
+
+        # Calculate projected monthly/yearly impact
+        daily_savings = -cost_diff  # positive means LP saves money
+        monthly_savings = daily_savings * 30
+        yearly_savings = daily_savings * 365
+
+        if cost_diff > 0:
+            emoji = "🔺"
+            cost_text = f"AI costs **${abs_diff:.4f} more** per day than LP"
+        elif cost_diff < 0:
+            emoji = "🟢"
+            cost_text = f"AI costs **${abs_diff:.4f} less** per day than LP"
+        else:
+            emoji = "⚖️"
+            cost_text = "AI and LP have identical daily costs"
+
+        comfort_text = (
+            f"Comfort improved by **{comfort_diff:+.2f} points**."
+            if comfort_diff != 0
+            else "No comfort difference detected."
+        )
+
         st.markdown(
             f"""
             ### 📊 Summary:
-            - **LP** minimizes cost only → ${st.session_state.total_cost_lp:.4f}
-            - **AI** balances cost + comfort → Comfort: {st.session_state.comfort_score:.2f}/10
-            - 💬 *Use AI mode when comfort matters more than raw savings.*
+            - **LP Total Cost:** ${st.session_state.total_cost_lp:.4f}  
+            - **LP Comfort:** {st.session_state.comfort_lp:.2f}/10  
+            - **AI Total Cost:** ${st.session_state.total_cost_ai:.4f}  
+            - **AI Comfort:** {st.session_state.comfort_ai:.2f}/10  
+            ---
+            {emoji} {cost_text}  
+            💬 {comfort_text}
             """
         )
+
+        # Show projected monthly/yearly cost impact
+        st.subheader("💰 Projected Savings (if schedule repeats daily)")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Daily Difference ($)", f"{daily_savings:+.4f}")
+        with col2:
+            st.metric("Monthly (~30 days)", f"{monthly_savings:+.2f}")
+        with col3:
+            st.metric("Yearly (~365 days)", f"{yearly_savings:+.2f}")

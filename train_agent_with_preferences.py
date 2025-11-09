@@ -55,67 +55,45 @@ def run_agent_with_preferences(model, prices, appliances, restricted_hours, pref
 
     return schedule
 
-def calculate_comfort_score(schedule, preferences, max_score=10.0):
-    """
-    Calculate a more realistic comfort score (0–10) based on how well
-    the schedule matches preferences, weighted by preference strength.
-    A perfect 10 requires meeting all strong (5/5) preferences and avoiding
-    all strong avoid zones.
-    """
-    if not preferences:
-        return max_score
+def calculate_comfort_score(schedule, preferences):
 
-    total_score = 0.0
-    total_possible = 0.0
+    total_score = 0
+    total_possible = 0
 
-    for appliance_name, hours in schedule.items():
-        if appliance_name not in preferences:
+    for appliance_name, pref in preferences.items():
+        if appliance_name not in schedule:
             continue
 
-        pref = preferences[appliance_name]
-        avoid_hours = set(pref.get("avoid_hours", []))
-        preferred_hours = set(pref.get("preferred_hours", []))
-        avoid_penalty = pref.get("avoid_penalty", 2.0)
-        prefer_bonus = pref.get("preferred_bonus", 1.0)
+        hours = schedule[appliance_name]
+        avoid_hours = pref.get("avoid_hours", [])
+        preferred_hours = pref.get("preferred_hours", [])
+        prefer_bonus = pref.get("preference_strength", 3)  # 1–5 scale
 
-        if not hours:
-            # Slight penalty if an appliance never runs in preferred hours
-            if preferred_hours:
-                total_score -= 0.5 * prefer_bonus
-            continue
+        # weightings
+        avoid_penalty = 3 * prefer_bonus      # heavy penalty for violating avoids
+        prefer_reward = 4 * prefer_bonus      # reward for following preferences
+        neutral_reward = 0.5                  # small baseline
+        completion_bonus = 2 * prefer_bonus   # extra if all required hours are satisfied
 
+        score = 0
         for hour in hours:
-            total_possible += 5  # every decision can gain up to 5 "comfort points"
-
-            # If the agent runs in an avoided hour, penalize based on strength
             if hour in avoid_hours:
-                total_score -= 2 * avoid_penalty
-
-            # If the agent runs in a preferred hour, give proportional bonus
+                score -= avoid_penalty
             elif hour in preferred_hours:
-                total_score += 3 * prefer_bonus
-
-            # Neutral hours are worth small neutral contribution
+                score += prefer_reward
             else:
-                total_score += 1  # partial comfort
+                score += neutral_reward
 
-        # Bonus: if all preferred hours were used at least once
-        if preferred_hours and preferred_hours.issubset(hours):
-            total_score += 2 * prefer_bonus
+        # full satisfaction bonus (no avoids, all in preferred if possible)
+        if all(h in preferred_hours for h in hours) and not any(h in avoid_hours for h in hours):
+            score += completion_bonus
 
-        # Extra penalty: if avoid_hours were heavily violated
-        overlap = avoid_hours.intersection(hours)
-        if overlap:
-            total_score -= len(overlap) * avoid_penalty
+        total_score += max(score, 0)  # no negative totals
+        total_possible += len(hours) * prefer_reward + completion_bonus
 
-    # Normalize to 0–10 scale
+    # normalize to 0–10
     if total_possible == 0:
-        return max_score
+        return 0.0
 
-    normalized = (total_score / total_possible) * max_score / 2
-    normalized = max(0.0, min(max_score, normalized))
-
-    # Apply a non-linear curve: make high scores harder to reach
-    normalized = (normalized / max_score) ** 0.8 * max_score
-
-    return round(normalized, 2)
+    normalized = (total_score / total_possible) * 10
+    return round(min(10, normalized), 2)
