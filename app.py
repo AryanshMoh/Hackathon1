@@ -51,7 +51,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">⚡ WattYouSave </h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">💡 WattYouSave </h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Optimize your appliance schedule using AI that learns your preferences</p>', unsafe_allow_html=True)
 
 # -------------------------------
@@ -582,6 +582,13 @@ if st.button("⚡ Optimize Schedule", type="primary", use_container_width=True):
     if len(prices) == 0:
         st.error("No price data available!")
     else:
+        # Validate that scheduling is possible
+        total_required_hours = sum(a['duration'] for a in appliances)
+        available_hours = len(prices) - len(restricted_hours)
+
+        if available_hours < total_required_hours:
+            st.error(f"⚠️ Impossible to schedule! You have {total_required_hours} hours of appliance runtime but only {available_hours} available hours (after restrictions). Please reduce restrictions or appliance durations.")
+            st.stop()
         # Create visualization containers
         progress_container = st.container()
         viz_container = st.container()
@@ -635,6 +642,14 @@ if st.button("⚡ Optimize Schedule", type="primary", use_container_width=True):
         progress_bar.progress(85)
 
         rl_schedule = run_agent_with_preferences(model, prices, appliances, restricted_hours, preferences)
+
+        # Validate that RL schedule is not empty
+        if all(len(rl_schedule.get(a['name'], [])) == 0 for a in appliances):
+            st.error("⚠️ AI failed to generate a schedule. This may happen with very restrictive settings. Try reducing time restrictions or adjusting preferences.")
+            # Fall back to LP schedule for RL
+            rl_schedule = lp_schedule.copy()
+            st.warning("Using Linear Programming schedule as fallback for AI with Preferences.")
+
         rl_readable = format_schedule_readable(rl_schedule, appliances)
 
         rl_cost = sum(
