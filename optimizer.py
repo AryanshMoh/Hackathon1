@@ -1,64 +1,51 @@
 import pandas as pd
 import pulp
 
-def optimize_schedule(prices_file, appliances):
+def optimize_schedule(prices_file, appliances, restricted_hours=None):
     """
-    Finds the cheapest hours to run each appliance based on hourly electricity prices
-    and returns a clean, human-readable schedule.
+    Finds the cheapest hours to run each appliance based on hourly electricity prices,
+    while completely avoiding restricted hours.
     """
-
-    # 1. Read hourly price data (e.g., 24 hours)
     prices = pd.read_csv(prices_file)
     num_hours = len(prices)
     hour_indices = range(num_hours)
 
-    # 2. Define optimization problem
     model = pulp.LpProblem("SmartEnergyPlanner", pulp.LpMinimize)
 
-    # 3. Binary variables: 1 if appliance runs during hour h
-    run = {}
-    for appliance in appliances:
-        for hour in hour_indices:
-            run[(appliance['name'], hour)] = pulp.LpVariable(f"{appliance['name']}_hour{hour}", cat="Binary")
+    # Binary variable for each appliance-hour
+    run = {
+        (a['name'], h): pulp.LpVariable(f"{a['name']}_hour{h}", cat="Binary")
+        for a in appliances for h in hour_indices
+    }
 
-    # 4. Objective: minimize total cost = sum(price * power * run)
-    total_cost = [
-        run[(appl['name'], h)] * appl['power'] * prices.loc[h, 'price']
-        for appl in appliances
-        for h in hour_indices
-    ]
-    model += pulp.lpSum(total_cost)
+    # Objective: minimize total cost
+    model += pulp.lpSum(run[(a['name'], h)] * a['power'] * prices.loc[h, 'price']
+                        for a in appliances for h in hour_indices)
 
-    # 5. Constraints: each appliance must run for its duration
-    for appl in appliances:
-        model += pulp.lpSum(run[(appl['name'], h)] for h in hour_indices) == appl['duration']
+    # Constraints: each appliance runs exactly for its duration
+    for a in appliances:
+        model += pulp.lpSum(run[(a['name'], h)] for h in hour_indices) == a['duration']
 
-        # Optional: limit to allowed hours if provided
-        if 'allowed_hours' in appl:
-            for h in hour_indices:
-                if h not in appl['allowed_hours']:
-                    model += run[(appl['name'], h)] == 0
+        # HARD RESTRICTION: cannot run in restricted hours
+        if restricted_hours:
+            for h in restricted_hours:
+                if h in hour_indices:
+                    model += run[(a['name'], h)] == 0
 
-    # 6. Solve
     model.solve()
 
-    # 7. Extract results
+    # Format schedule
     schedule = {}
-    for appl in appliances:
-        hours_on = [h for h in hour_indices if pulp.value(run[(appl['name'], h)]) == 1]
-        schedule[appl['name']] = hours_on
-
-    # 8. Format for readability
-    readable_schedule = {}
-    for appl, hours in schedule.items():
-        if not hours:
-            readable_schedule[appl] = "Not scheduled"
+    for a in appliances:
+        hours_on = [h for h in hour_indices if pulp.value(run[(a['name'], h)]) == 1]
+        if not hours_on:
+            schedule[a['name']] = "Not scheduled"
             continue
 
-        # Merge consecutive hours into ranges
+        # Merge consecutive hours
         ranges = []
-        start = prev = hours[0]
-        for h in hours[1:]:
+        start = prev = hours_on[0]
+        for h in hours_on[1:]:
             if h == prev + 1:
                 prev = h
             else:
@@ -66,20 +53,7 @@ def optimize_schedule(prices_file, appliances):
                 start = prev = h
         ranges.append((start, prev))
 
-        # Format ranges into readable strings
-        readable = [f"{s}:00–{e+1}:00" if s != e else f"{s}:00–{s+1}:00" for s, e in ranges]
-        readable_schedule[appl] = ", ".join(readable)
+        readable = [f"{s}:00–{e+1}:00" for s, e in ranges]
+        schedule[a['name']] = ", ".join(readable)
 
-    return readable_schedule
-
-
-# Example test run
-if __name__ == "__main__":
-    appliances = [
-        {"name": "Washer", "power": 1.2, "duration": 2},
-        {"name": "Dryer", "power": 1.5, "duration": 1},
-        {"name": "Dishwasher", "power": 1.0, "duration": 2}
-    ]
-
-    result = optimize_schedule("data/prices.csv", appliances)
-    print(result)
+    return schedule

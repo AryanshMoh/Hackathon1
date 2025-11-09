@@ -1,18 +1,24 @@
 # utils/appliance_data.py
+# Updated default hourly kWh values based on average appliance energy use
+# Sources:
+# - Silicon Valley Power Appliance Energy Use Chart: https://www.siliconvalleypower.com/residents/save-energy/appliance-energy-use-chart
+# - EnergySage: https://www.energysage.com/electricity/house-watts/how-many-watts-does-a-refrigerator-use/
+# - IGS Energy: https://www.igs.com/energy-resource-center/energy-101/how-much-electricity-do-my-home-appliances-use
+
+
 appliance_defaults = {
-    "Refrigerator": 1.2,
-    "Washing Machine": 0.5,
-    "Dryer": 3.0,
-    "Dishwasher": 1.5,
-    "Microwave": 1.0,
-    "Oven": 2.3,
-    "Toaster": 0.8,
-    "Coffee Maker": 0.9,
-    "Television": 0.2,
-    "Computer": 0.1,
-    "Air Conditioner": 3.5,
-    "Heater": 2.0,
-    "Vacuum Cleaner": 1.4,
-    "Iron": 1.8,
-    "Lighting": 0.6
+    "Washing Machine": 0.30,
+    "Dryer": 2.50,
+    "Dishwasher": 1.50,
+    "Microwave": 0.20,
+    "Oven": 2.30,
+    "Toaster": 0.05,
+    "Coffee Maker": 0.30,
+    "Television": 0.10,
+    "Computer": 0.10,
+    "Air Conditioner": 3.50,
+    "Heater": 1.50,
+    "Vacuum Cleaner": 0.75,
+    "Iron": 1.10,
+    "Lighting": 0.02
 }

@@ -1,44 +1,59 @@
-# train_agent.py
-from stable_baselines3 import PPO
-from energy_env import EnergyEnv
-from utils.display_utils import format_schedule_readable
 import numpy as np
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_checker import check_env
+from energy_env import EnergyEnv
 
-def train_agent(prices, appliances):
+
+def train_agent(prices, appliances, restricted_hours):
     """
-    Trains a PPO reinforcement learning agent on the custom energy environment.
+    Train the PPO reinforcement learning agent using the given price data and restricted hours.
     """
-    env = EnergyEnv(prices, appliances)
-    model = PPO("MlpPolicy", env, verbose=0, n_steps=256, batch_size=64)
-    model.learn(total_timesteps=20_000)
+    env = EnergyEnv(prices, appliances, restricted_hours)
+    check_env(env, warn=True)
+
+    model = PPO("MlpPolicy", env, verbose=0)
+    model.learn(total_timesteps=10000)  # ~10–15 seconds training
     model.save("models/energy_agent")
+
     return model
 
 
-def run_agent(model, prices, appliances):
+def run_agent(model, prices, appliances, restricted_hours):
     """
-    Runs a trained RL agent on the environment to produce a readable schedule.
+    Run the trained model to generate an optimized schedule.
     """
-    env = EnergyEnv(prices, appliances)
+    env = EnergyEnv(prices, appliances, restricted_hours)
     obs, _ = env.reset()
     done = False
 
-    # Store on-hours for each appliance
-    raw_schedule = {a["name"]: [] for a in appliances}
+    schedule = {a["name"]: [] for a in appliances}
 
     while not done:
-        action, _states = model.predict(obs, deterministic=True)
+        action, _ = model.predict(obs, deterministic=True)
         obs, reward, done, _, info = env.step(action)
 
-        # Record which appliances are ON during this hour
-        current_hour = int(obs[0]) - 1
-        if current_hour < 0:
-            current_hour = 0
-
+        # Record scheduled hour for each appliance
         for i, a in enumerate(appliances):
             if action[i] == 1:
-                raw_schedule[a["name"]].append(current_hour)
+                hour = env.current_hour
+                schedule[a["name"]].append(hour)
 
-    # Convert to human-readable format safely
-    formatted_schedule = format_schedule_readable(raw_schedule, appliances)
-    return formatted_schedule
+    # Format hours into human-readable ranges
+    readable_schedule = {}
+    for name, hours in schedule.items():
+        if not hours:
+            readable_schedule[name] = "Not scheduled"
+            continue
+
+        hours = sorted(set(hours))
+        ranges = []
+        start = prev = hours[0]
+        for h in hours[1:]:
+            if h != prev + 1:
+                ranges.append(f"{start}:00–{prev+1}:00")
+                start = h
+            prev = h
+        ranges.append(f"{start}:00–{prev+1}:00")
+        readable_schedule[name] = ", ".join(ranges)
+
+    return readable_schedule
