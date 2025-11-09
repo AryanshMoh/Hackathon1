@@ -13,8 +13,8 @@ def train_agent_with_preferences(prices, appliances, restricted_hours, preferenc
 
     # Improved hyperparameters
     model = PPO(
-        "MlpPolicy", 
-        env, 
+        "MlpPolicy",
+        env,
         learning_rate=0.0003,
         n_steps=2048,
         batch_size=64,
@@ -22,9 +22,9 @@ def train_agent_with_preferences(prices, appliances, restricted_hours, preferenc
         gamma=0.99,
         verbose=0
     )
-    
-    # Train the model
-    model.learn(total_timesteps=50000)
+
+    # Train the model with more timesteps to ensure proper learning
+    model.learn(total_timesteps=100000)
     model.save("models/energy_agent_preferences")
 
     return model
@@ -65,6 +65,11 @@ def calculate_comfort_score(schedule, preferences):
             continue
 
         hours = schedule[appliance_name]
+
+        # If appliance is not scheduled at all, this is a major failure - return very low score
+        if not hours or len(hours) == 0:
+            return 0.5  # Very low score for not scheduling appliances when preferences exist
+
         avoid_hours = pref.get("avoid_hours", [])
         preferred_hours = pref.get("preferred_hours", [])
         prefer_bonus = pref.get("preference_strength", 3)  # 1–5 scale
@@ -85,7 +90,8 @@ def calculate_comfort_score(schedule, preferences):
                 score += neutral_reward
 
         # full satisfaction bonus (no avoids, all in preferred if possible)
-        if all(h in preferred_hours for h in hours) and not any(h in avoid_hours for h in hours):
+        # Only award if hours is not empty AND conditions are met
+        if len(hours) > 0 and all(h in preferred_hours for h in hours) and not any(h in avoid_hours for h in hours):
             score += completion_bonus
 
         total_score += max(score, 0)  # no negative totals
@@ -96,4 +102,5 @@ def calculate_comfort_score(schedule, preferences):
         return 0.0
 
     normalized = (total_score / total_possible) * 10
-    return round(min(10, normalized), 2)
+    # Cap maximum score at 9.5 to ensure it never shows 10/10
+    return round(min(9.5, normalized), 2)
