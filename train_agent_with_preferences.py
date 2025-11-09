@@ -68,11 +68,12 @@ def calculate_comfort_score(schedule, preferences):
 
         # If appliance is not scheduled at all, this is a major failure - return very low score
         if not hours or len(hours) == 0:
-            return 0.5  # Very low score for not scheduling appliances when preferences exist
+            return 0.5  # Low score but never exactly 0 (constraint: score must be in range (0, 10))
 
         avoid_hours = pref.get("avoid_hours", [])
         preferred_hours = pref.get("preferred_hours", [])
-        prefer_bonus = pref.get("preference_strength", 3)  # 1–5 scale
+        # Get the preference strength from user settings (app.py uses 'preferred_bonus')
+        prefer_bonus = pref.get("preferred_bonus", pref.get("preference_strength", 3))
 
         # weightings
         avoid_penalty = 3 * prefer_bonus      # heavy penalty for violating avoids
@@ -99,8 +100,12 @@ def calculate_comfort_score(schedule, preferences):
 
     # normalize to 0–10
     if total_possible == 0:
-        return 0.0
+        return 0.5  # Avoid returning exactly 0, which violates the constraint
 
     normalized = (total_score / total_possible) * 10
-    # Cap maximum score at 9.5 to ensure it never shows 10/10
-    return round(min(9.5, normalized), 2)
+
+    # Ensure score is NEVER exactly 0 or 10
+    # Cap at 9.9 to ensure when displayed with .1f format, it won't round to 10.0
+    # Clamp to range (0.1, 9.9) to strictly exclude 0 and 10
+    clamped = max(0.1, min(9.9, normalized))
+    return round(clamped, 2)
