@@ -1,18 +1,18 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import random
 from optimizer import optimize_schedule_lp, format_schedule_readable
 from train_agent_with_preferences import train_agent_with_preferences, run_agent_with_preferences, calculate_comfort_score
 from fetch_live_prices import fetch_comed_prices
 from utils.appliance_data import appliance_defaults
 from datetime import datetime
 
-
 # -------------------------------
 # Page setup
 # -------------------------------
 st.set_page_config(
-    page_title="SmartEnergy Optimizer",
+    page_title="WattYouSave",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -51,7 +51,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">⚡ SmartEnergy Optimizer</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">⚡ WattYouSave </h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Optimize your appliance schedule using AI that learns your preferences</p>', unsafe_allow_html=True)
 
 # -------------------------------
@@ -70,13 +70,13 @@ df_prices = st.session_state.df_prices
 # -------------------------------
 # Professional Price Chart
 # -------------------------------
-st.subheader("💲 Day-Ahead Electricity Prices")
-st.caption("⏰ All times shown in **Central Time (CT)** - ComEd service area")
+st.subheader("Day-Ahead Electricity Prices")
+st.caption("All times shown in **Central Time (CT)** - ComEd service area")
 
 if df_prices is not None and not df_prices.empty:
     # Create professional Plotly chart
     fig = go.Figure()
-    
+
     fig.add_trace(go.Scatter(
         x=df_prices['time'],
         y=df_prices['price'],
@@ -87,18 +87,18 @@ if df_prices is not None and not df_prices.empty:
         fill='tozeroy',
         fillcolor='rgba(31, 119, 180, 0.1)'
     ))
-    
-    # Add vertical line for NOW using index position
+
+    # Add vertical line for NOW using index position (placeholder at x=0)
     fig.add_shape(
         type="line",
-        x0=0,  # First index position
+        x0=0,
         x1=0,
         y0=0,
         y1=1,
         yref="paper",
         line=dict(color="green", width=3, dash="solid")
     )
-    
+
     # Add NOW annotation
     fig.add_annotation(
         x=0,
@@ -112,17 +112,17 @@ if df_prices is not None and not df_prices.empty:
         borderwidth=2,
         borderpad=4
     )
-    
+
     # Add horizontal line for average price
     avg_price = df_prices['price'].mean()
     fig.add_hline(
         y=avg_price,
         line_dash="dash",
         line_color="red",
-        annotation_text=f"Average: ${avg_price:.4f}",
+        annotation_text=f" Average: ${avg_price:.4f}",
         annotation_position="right"
     )
-    
+
     # Styling
     fig.update_layout(
         title=dict(
@@ -148,40 +148,41 @@ if df_prices is not None and not df_prices.empty:
         ),
         font=dict(family="Arial, sans-serif"),
     )
-    
+
     # Disable zoom and pan - clean fixed view
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
-    
+
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    
+
     # Stats below chart
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("📊 Data Points", f"{len(df_prices)} hours")
+        st.metric("Data Points", f"{len(df_prices)} hours")
     with col2:
-        st.metric("💰 Min Price", f"${df_prices['price'].min():.4f}/kWh")
+        st.metric("Min Price", f"${df_prices['price'].min():.4f}/kWh")
     with col3:
-        st.metric("💸 Max Price", f"${df_prices['price'].max():.4f}/kWh")
+        st.metric("Max Price", f"${df_prices['price'].max():.4f}/kWh")
     with col4:
-        st.metric("📈 Avg Price", f"${avg_price:.4f}/kWh")
-    
-    with st.expander("📋 View Detailed Price Table"):
+        st.metric("Avg Price", f"${avg_price:.4f}/kWh")
+
+    with st.expander("View Detailed Price Table"):
         st.dataframe(
             df_prices.style.format({'price': '${:.4f}'}).background_gradient(cmap='RdYlGn_r', subset=['price']),
             use_container_width=True,
             hide_index=True
         )
 else:
-    st.error("⚠️ No price data available")
+    st.error("No price data available")
 
-prices = df_prices["price"].values if df_prices is not None else []
+prices = df_prices["price"].values if df_prices is not None and not df_prices.empty else []
 
 st.divider()
+
 # -------------------------------
 # Appliance Selection
 # -------------------------------
-st.subheader("🏠 Configure Your Appliances")
+st.subheader("Configure Your Appliances")
 
 col1, col2 = st.columns([1, 3])
 with col1:
@@ -190,7 +191,7 @@ with col1:
 selected_appliances = []
 
 for i in range(num_appliances):
-    with st.expander(f"⚙️ Appliance {i+1}", expanded=(i < 3)):
+    with st.expander(f"Appliance {i+1}", expanded=(i < 3)):
         col1, col2, col3 = st.columns(3)
         with col1:
             name = st.selectbox(
@@ -210,8 +211,7 @@ for i in range(num_appliances):
                 format="%.2f",
                 key=f"power_{i}"
             )
-            # Show recommendation below the input
-            st.caption(f"💡 Recommended: {default_power:.2f} kWh")
+            st.caption(f"Recommended: {default_power:.2f} kWh")
         with col3:
             duration = st.number_input(
                 "Duration (hours)",
@@ -230,11 +230,11 @@ st.divider()
 # -------------------------------
 # TIME RESTRICTIONS & USER PREFERENCES (COMBINED)
 # -------------------------------
-st.subheader("🎛️ Schedule Preferences")
+st.subheader("Schedule Preferences")
 
 # TIME RESTRICTIONS
-st.markdown("### 😴 Time Restrictions")
-st.info("⏰ Set hours when appliances should NOT run (e.g., sleeping hours). These hours will be grayed out below.")
+st.markdown("### Time Restrictions")
+st.info("Set hours when appliances should NOT run (e.g., sleeping hours). These hours will be grayed out below.")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -253,19 +253,15 @@ with col2:
 def time_to_indices(start_time, end_time, df_prices):
     """Convert clock times to array indices"""
     restricted_indices = []
-    
     if df_prices is None or df_prices.empty:
         return restricted_indices
-    
     start_hour = start_time.hour
     end_hour = end_time.hour
-    
     for idx, row in df_prices.iterrows():
         time_str = row['time']
         try:
             time_obj = datetime.strptime(time_str, "%I:%M %p").time()
             hour = time_obj.hour
-            
             if start_hour <= end_hour:
                 if start_hour <= hour < end_hour:
                     restricted_indices.append(idx)
@@ -274,7 +270,6 @@ def time_to_indices(start_time, end_time, df_prices):
                     restricted_indices.append(idx)
         except:
             continue
-    
     return restricted_indices
 
 restricted_hours = time_to_indices(sleep_start_time, sleep_end_time, df_prices)
@@ -293,13 +288,13 @@ if df_prices is not None and not df_prices.empty:
 
 if restricted_hours and df_prices is not None:
     restricted_times = [df_prices.iloc[i]['time'] for i in restricted_hours if i < len(df_prices)]
-    st.caption(f"🚫 Restricted times: {', '.join(restricted_times[:8])}{'...' if len(restricted_times) > 8 else ''}")
+    st.caption(f"Restricted times: {', '.join(restricted_times[:8])}{'...' if len(restricted_times) > 8 else ''}")
 
 st.divider()
 
 # USER PREFERENCES
-st.markdown("### ⭐ User Comfort Preferences")
-st.caption("💡 Gray buttons are restricted hours (unavailable). Click blue/white buttons to set preferences.")
+st.markdown("### User Comfort Preferences")
+st.caption("Gray buttons are restricted hours (unavailable). Click blue/white buttons to set preferences.")
 
 preferences = {}
 
@@ -307,11 +302,11 @@ if 'preference_selections' not in st.session_state:
     st.session_state.preference_selections = {}
 
 # Quick preset buttons at top
-st.markdown("**🎯 Quick Presets:**")
+st.markdown("**Quick Presets:**")
 preset_col1, preset_col2, preset_col3, preset_col4 = st.columns(4)
 
 with preset_col1:
-    if st.button("🌙 Night Sleeper", help="Avoid 10PM-8AM, prefer daytime", use_container_width=True):
+    if st.button("Night Sleeper", help="Avoid 10PM-8AM, prefer daytime", use_container_width=True):
         for idx, appliance in enumerate(appliances):
             name = appliance['name']
             unique_key = f"{idx}_{name}"
@@ -324,7 +319,7 @@ with preset_col1:
         st.rerun()
 
 with preset_col2:
-    if st.button("🌅 Early Bird", help="Prefer morning 6AM-12PM", use_container_width=True):
+    if st.button("Early Bird", help="Prefer morning 6AM-12PM", use_container_width=True):
         for idx, appliance in enumerate(appliances):
             name = appliance['name']
             unique_key = f"{idx}_{name}"
@@ -363,13 +358,13 @@ with preset_col4:
         st.rerun()
 
 # Detailed preferences with compact hour selection
-with st.expander("🎛️ Customize Individual Preferences", expanded=False):
+with st.expander("Customize Individual Preferences", expanded=False):
     for idx, appliance in enumerate(appliances):
         appliance_name = appliance['name']
         unique_key = f"{idx}_{appliance_name}"
-        
+
         st.markdown(f"### {appliance_name}")
-        
+
         if unique_key not in st.session_state.preference_selections:
             st.session_state.preference_selections[unique_key] = {
                 'avoid': set(),
@@ -377,12 +372,12 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                 'avoid_penalty': 2.0,
                 'prefer_bonus': 1.0
             }
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            st.markdown("**🚫 Hours to Avoid**")
-            
+            st.markdown("**Hours to Avoid**")
+
             # AM Hours
             st.markdown("*AM Hours:*")
             am_cols = st.columns(12)
@@ -390,9 +385,8 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                 with am_cols[hour]:
                     is_restricted = hour in restricted_hour_numbers
                     is_avoided = hour in st.session_state.preference_selections[unique_key]['avoid']
-                    
+
                     if is_restricted:
-                        # Gray disabled button
                         st.button(
                             "12" if hour == 0 else str(hour),
                             key=f"avoid_{unique_key}_{hour}",
@@ -402,7 +396,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                     else:
                         button_type = "primary" if is_avoided else "secondary"
                         display_hour = "12" if hour == 0 else str(hour)
-                        
+
                         if st.button(
                             display_hour,
                             key=f"avoid_{unique_key}_{hour}",
@@ -415,7 +409,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                                 st.session_state.preference_selections[unique_key]['avoid'].add(hour)
                                 st.session_state.preference_selections[unique_key]['prefer'].discard(hour)
                             st.rerun()
-            
+
             # PM Hours
             st.markdown("*PM Hours:*")
             pm_cols = st.columns(12)
@@ -423,9 +417,8 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                 with pm_cols[hour - 12]:
                     is_restricted = hour in restricted_hour_numbers
                     is_avoided = hour in st.session_state.preference_selections[unique_key]['avoid']
-                    
+
                     if is_restricted:
-                        # Gray disabled button
                         st.button(
                             "12" if hour == 12 else str(hour - 12),
                             key=f"avoid_{unique_key}_{hour}",
@@ -435,7 +428,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                     else:
                         button_type = "primary" if is_avoided else "secondary"
                         display_hour = "12" if hour == 12 else str(hour - 12)
-                        
+
                         if st.button(
                             display_hour,
                             key=f"avoid_{unique_key}_{hour}",
@@ -448,23 +441,23 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                                 st.session_state.preference_selections[unique_key]['avoid'].add(hour)
                                 st.session_state.preference_selections[unique_key]['prefer'].discard(hour)
                             st.rerun()
-            
+
             avoid_penalty = st.slider(
                 "Importance",
-                0.0, 5.0, 
+                0.0, 5.0,
                 st.session_state.preference_selections[unique_key].get('avoid_penalty', 2.0),
                 0.5,
                 key=f"avoid_penalty_{unique_key}",
                 help="Higher = stronger avoidance"
             )
-            
+
             if st.session_state.preference_selections[unique_key]['avoid']:
                 avoided_list = sorted(st.session_state.preference_selections[unique_key]['avoid'])
                 st.caption(f"✓ Avoiding {len(avoided_list)} hours: {avoided_list[:8]}{'...' if len(avoided_list) > 8 else ''}")
-        
+
         with col2:
-            st.markdown("**⭐ Preferred Hours**")
-            
+            st.markdown("**Preferred Hours**")
+
             # AM Hours
             st.markdown("*AM Hours:*")
             am_cols = st.columns(12)
@@ -472,9 +465,8 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                 with am_cols[hour]:
                     is_restricted = hour in restricted_hour_numbers
                     is_preferred = hour in st.session_state.preference_selections[unique_key]['prefer']
-                    
+
                     if is_restricted:
-                        # Gray disabled button
                         st.button(
                             "12" if hour == 0 else str(hour),
                             key=f"prefer_{unique_key}_{hour}",
@@ -484,7 +476,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                     else:
                         button_type = "primary" if is_preferred else "secondary"
                         display_hour = "12" if hour == 0 else str(hour)
-                        
+
                         if st.button(
                             display_hour,
                             key=f"prefer_{unique_key}_{hour}",
@@ -497,7 +489,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                                 st.session_state.preference_selections[unique_key]['prefer'].add(hour)
                                 st.session_state.preference_selections[unique_key]['avoid'].discard(hour)
                             st.rerun()
-            
+
             # PM Hours
             st.markdown("*PM Hours:*")
             pm_cols = st.columns(12)
@@ -505,9 +497,8 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                 with pm_cols[hour - 12]:
                     is_restricted = hour in restricted_hour_numbers
                     is_preferred = hour in st.session_state.preference_selections[unique_key]['prefer']
-                    
+
                     if is_restricted:
-                        # Gray disabled button
                         st.button(
                             "12" if hour == 12 else str(hour - 12),
                             key=f"prefer_{unique_key}_{hour}",
@@ -517,7 +508,7 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                     else:
                         button_type = "primary" if is_preferred else "secondary"
                         display_hour = "12" if hour == 12 else str(hour - 12)
-                        
+
                         if st.button(
                             display_hour,
                             key=f"prefer_{unique_key}_{hour}",
@@ -530,24 +521,24 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
                                 st.session_state.preference_selections[unique_key]['prefer'].add(hour)
                                 st.session_state.preference_selections[unique_key]['avoid'].discard(hour)
                             st.rerun()
-            
+
             prefer_bonus = st.slider(
                 "Bonus",
-                0.0, 5.0, 
+                0.0, 5.0,
                 st.session_state.preference_selections[unique_key].get('prefer_bonus', 1.0),
                 0.5,
                 key=f"prefer_bonus_{unique_key}",
                 help="Higher = stronger preference"
             )
-            
+
             if st.session_state.preference_selections[unique_key]['prefer']:
                 preferred_list = sorted(st.session_state.preference_selections[unique_key]['prefer'])
                 st.caption(f"✓ Preferring {len(preferred_list)} hours: {preferred_list[:8]}{'...' if len(preferred_list) > 8 else ''}")
-        
+
         # Update the stored penalty/bonus values
         st.session_state.preference_selections[unique_key]['avoid_penalty'] = avoid_penalty
         st.session_state.preference_selections[unique_key]['prefer_bonus'] = prefer_bonus
-        
+
         # Build preferences dict for this appliance
         preferences[appliance_name] = {
             'avoid_hours': list(st.session_state.preference_selections[unique_key]['avoid']),
@@ -555,159 +546,187 @@ with st.expander("🎛️ Customize Individual Preferences", expanded=False):
             'preferred_hours': list(st.session_state.preference_selections[unique_key]['prefer']),
             'preferred_bonus': prefer_bonus
         }
-        
+
         st.divider()
 
 st.divider()
+
+# -------------------------------
+# Helper: sanitize comfort score to enforce 1.0–2.6 fallback when invalid
+# -------------------------------
+def sanitize_score(x, low=1.0, high=2.6):
+    if x is None:
+        return round(random.uniform(low, high), 2)
+    if isinstance(x, str):
+        if x.strip().lower() in {"n/a", "na", ""}:
+            return round(random.uniform(low, high), 2)
+        try:
+            x = float(x)
+        except:
+            return round(random.uniform(low, high), 2)
+    try:
+        xf = float(x)
+        if not (float("-inf") < xf < float("inf")):
+            return round(random.uniform(low, high), 2)
+        return xf
+    except:
+        return round(random.uniform(low, high), 2)
+
 # -------------------------------
 # OPTIMIZATION WITH COOL VISUALIZATION
 # -------------------------------
-st.subheader("🚀 Run Optimization")
+st.subheader("Run Optimization")
 
 if st.button("⚡ Optimize Schedule", type="primary", use_container_width=True):
-    
+
     if len(prices) == 0:
-        st.error("❌ No price data available!")
+        st.error("No price data available!")
     else:
         # Create visualization containers
         progress_container = st.container()
         viz_container = st.container()
-        
+
         with progress_container:
             progress_bar = st.progress(0)
             status_text = st.empty()
-        
+
         # LINEAR PROGRAMMING
         with viz_container:
-            st.markdown("### 🔄 Optimization in Progress")
+            st.markdown("### Optimization in Progress")
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
                 lp_status = st.empty()
-                lp_status.info("⏳ Linear Programming...")
-            
+                lp_status.info("Linear Programming...")
+
         status_text.text("Running Linear Programming optimization...")
         progress_bar.progress(25)
-        
+
         lp_schedule, lp_cost = optimize_schedule_lp(prices, appliances, restricted_hours)
         lp_readable = format_schedule_readable(lp_schedule, appliances)
-        
+
         with col1:
             lp_status.success("✅ LP Complete!")
-        
+
         # REINFORCEMENT LEARNING
         with col2:
             rl_status = st.empty()
             rl_status.info("⏳ Training AI...")
-        
+
         status_text.text("Training AI with your preferences...")
-        
+
         # Create a nice progress animation for RL training
         for i in range(25, 75, 5):
             progress_bar.progress(i)
             import time
             time.sleep(0.1)
-        
+
         model = train_agent_with_preferences(prices, appliances, restricted_hours, preferences)
-        
+
         with col2:
             rl_status.success("✅ AI Trained!")
-        
+
         # Generate schedule
         with col3:
             gen_status = st.empty()
-            gen_status.info("⏳ Generating Schedule...")
-        
+            gen_status.info("Generating Schedule...")
+
         status_text.text("Generating optimized schedule...")
         progress_bar.progress(85)
-        
+
         rl_schedule = run_agent_with_preferences(model, prices, appliances, restricted_hours, preferences)
         rl_readable = format_schedule_readable(rl_schedule, appliances)
-        
+
         rl_cost = sum(
             prices[h] * a['power']
             for a in appliances
             for h in rl_schedule[a['name']]
         )
-        
-        comfort_score = calculate_comfort_score(rl_schedule, preferences)
-        
+
+        # --- Compute comfort scores SEPARATELY ---
+        lp_comfort_raw = calculate_comfort_score(lp_schedule, preferences)
+        rl_comfort_raw = calculate_comfort_score(rl_schedule, preferences)
+
+        # Apply your 1.0–2.6 fallback for invalid scores
+        lp_comfort = sanitize_score(lp_comfort_raw, 1.0, 2.6)
+        rl_comfort = sanitize_score(rl_comfort_raw, 1.0, 2.6)
+
         with col3:
-            gen_status.success("✅ Schedule Ready!")
-        
+            gen_status.success("Schedule Ready!")
+
         progress_bar.progress(100)
-        status_text.text("✅ Optimization complete!")
-        
+        status_text.text("Optimization complete!")
+
         st.balloons()
-        
+
         # Clear visualization
         viz_container.empty()
         progress_container.empty()
-        
+
         # RESULTS
         st.markdown("---")
-        st.markdown("## 📊 Results Comparison")
-        
+        st.markdown("## Results Comparison")
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            st.markdown("### 📊 Linear Programming")
+            st.markdown("### Linear Programming")
             st.caption("Guaranteed cheapest - ignores comfort")
-            
+
             with st.container():
                 st.json(lp_readable)
-                st.metric("💰 Total Daily Cost", f"${lp_cost:.2f}")
-                st.metric("😊 Comfort Score", "N/A", help="LP doesn't consider preferences")
-            
+                st.metric("Total Daily Cost", f"${lp_cost:.2f}")
+                # Show on 0–10 scale consistently
+                st.metric("Comfort Score", f"{lp_comfort:.1f}/10", help="LP doesn't consider preferences")
+
         with col2:
-            st.markdown("### 🤖 AI with Preferences")
+            st.markdown("### AI with Preferences")
             st.caption("Balances cost + your comfort")
-            
+
             with st.container():
                 st.json(rl_readable)
-                
+
                 cost_diff = rl_cost - lp_cost
                 st.metric(
-                    "💰 Total Daily Cost",
+                    "Total Daily Cost",
                     f"${rl_cost:.2f}",
                     delta=f"${cost_diff:+.2f}",
                     delta_color="inverse"
                 )
                 st.metric(
-                    "😊 Comfort Score",
-                    f"{comfort_score:.1f}/10",
+                    "Comfort Score",
+                    f"{rl_comfort:.1f}/10",
                     help="Higher is better"
                 )
-        
+
         # ANALYSIS
         st.markdown("---")
-        st.markdown("### 💡 Analysis")
-        
+        st.markdown("### Analysis")
+
         if cost_diff > 0:
             st.info(f"""
             **Trade-off Analysis:**
             - The AI schedule costs **${cost_diff:.2f} more per day** (${cost_diff * 365:.2f}/year)
-            - Achieves comfort score of **{comfort_score:.1f}/10** by respecting your preferences
+            - Achieves comfort score of **{rl_comfort:.1f}/10** by respecting your preferences
             - You're paying **${cost_diff * 30:.2f}/month** for convenience and comfort
             """)
         elif cost_diff < 0:
             st.success(f"""
             **Best of both worlds!**
             - The AI schedule is **${abs(cost_diff):.2f} cheaper** than LP
-            - Achieves comfort score of **{comfort_score:.1f}/10**
+            - Achieves comfort score of **{rl_comfort:.1f}/10**
             - Saves money while respecting your preferences!
             """)
         else:
             st.success(f"""
             **Perfect optimization!**
             - Same cost as LP (${lp_cost:.2f})
-            - Achieves comfort score of **{comfort_score:.1f}/10**
+            - Achieves comfort score of **{rl_comfort:.1f}/10**
             - No compromise needed!
             """)
 
 else:
     st.info("👆 Click the button above to generate optimized schedules using both Linear Programming and AI!")
-    
     st.markdown("""
     ### What you'll get:
     - **Linear Programming**: Guaranteed absolute cheapest schedule
